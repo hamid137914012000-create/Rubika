@@ -13,6 +13,9 @@ if not BOT_TOKEN:
 
 app = Client(bot_token=BOT_TOKEN)
 
+# ── کش در حافظه ──
+_user_cache = {}
+
 # ── فایل دیتابیس ──
 DB_FILE = "users_db.json"
 
@@ -22,6 +25,9 @@ DEFAULT_USER = {
     "prefix": "𓄂 ‌",
     "suffix": " ♡𝑫𝑶𝑳𝑭𓆃",
 }
+
+# ── کلمات جایگزین برای NAME ──
+PLACEHOLDER_WORDS = ["Name", "NAME", "name", "اسم"]
 
 # ── لیست دستورات معتبر ──
 COMMANDS = [
@@ -36,19 +42,52 @@ COMMANDS = [
 # ═══════════════════════════════════════════
 
 def get_sender_id(message):
-    for attr in ["sender_id", "from_id", "from_user_id", "user_id"]:
-        if hasattr(message, attr):
-            val = getattr(message, attr)
-            if val:
-                return val
-    if hasattr(message, "sender") and message.sender:
-        if hasattr(message.sender, "id"):
-            return message.sender.id
-        if hasattr(message.sender, "user_id"):
-            return message.sender.user_id
-    if hasattr(message, "from_user") and message.from_user:
-        if hasattr(message.from_user, "id"):
-            return message.from_user.id
+    """آیدی فرستنده رو با اولویت‌های مختلف بگیر"""
+    try:
+        if hasattr(message, "sender_id") and message.sender_id:
+            return str(message.sender_id)
+    except Exception:
+        pass
+    
+    try:
+        if hasattr(message, "from_id") and message.from_id:
+            return str(message.from_id)
+    except Exception:
+        pass
+    
+    try:
+        if hasattr(message, "from_user") and message.from_user:
+            if hasattr(message.from_user, "id") and message.from_user.id:
+                return str(message.from_user.id)
+            if hasattr(message.from_user, "user_id") and message.from_user.user_id:
+                return str(message.from_user.user_id)
+    except Exception:
+        pass
+    
+    try:
+        if hasattr(message, "sender") and message.sender:
+            if hasattr(message.sender, "id") and message.sender.id:
+                return str(message.sender.id)
+            if hasattr(message.sender, "user_id") and message.sender.user_id:
+                return str(message.sender.user_id)
+    except Exception:
+        pass
+    
+    try:
+        if hasattr(message, "author") and message.author:
+            if hasattr(message.author, "id") and message.author.id:
+                return str(message.author.id)
+    except Exception:
+        pass
+    
+    try:
+        if hasattr(message, "chat") and message.chat:
+            if hasattr(message.chat, "id") and message.chat.id:
+                return str(message.chat.id)
+    except Exception:
+        pass
+    
+    print("⚠️ نتونستم آیدی رو بگیرم. ویژگی‌های message:", dir(message))
     return None
 
 
@@ -67,27 +106,47 @@ def load_db():
 
 
 def save_db(data):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("⚠️ خطا در ذخیره فایل:", e)
 
 
 def get_user(user_id):
     if user_id is None:
         return DEFAULT_USER.copy()
+    
+    user_id = str(user_id)
+    
+    # اول از کش
+    if user_id in _user_cache:
+        return _user_cache[user_id].copy()
+    
+    # بعد از فایل
     db = load_db()
-    user = db.get(str(user_id), DEFAULT_USER.copy())
+    user = db.get(user_id, DEFAULT_USER.copy())
     for k, v in DEFAULT_USER.items():
         if k not in user:
             user[k] = v
+    
+    _user_cache[user_id] = user.copy()
     return user
 
 
 def set_user(user_id, data):
     if user_id is None:
         return
-    db = load_db()
-    db[str(user_id)] = data
-    save_db(db)
+    
+    user_id = str(user_id)
+    _user_cache[user_id] = data.copy()
+    
+    try:
+        db = load_db()
+        db[user_id] = data
+        save_db(db)
+    except Exception as e:
+        print("⚠️ خطا در ذخیره:", e)
 
 
 # ═══════════════════════════════════════════
@@ -100,6 +159,14 @@ def build_tag(name, user):
         return None
     converted = convert(name, user.get("font", "bold"))
     return f"{user.get('prefix','')}{converted}{user.get('suffix','')}"
+
+
+def find_placeholder(text):
+    """دنبال کلمه‌ی جایگزین بگرد و موقعیتش رو برگردون"""
+    for word in PLACEHOLDER_WORDS:
+        if word in text:
+            return word
+    return None
 
 
 # ═══════════════════════════════════════════
@@ -211,11 +278,12 @@ async def cmd_settag(client, message):
     await message.reply(
         "🎓 **حالت یادگیری قالب**\n\n"
         "یه نمونه تگ از قالب دلخواهت بفرست.\n"
-        "جای اسمت رو با کلمه‌ی `NAME` مشخص کن.\n\n"
+        "جای اسمت رو با کلمه‌ی `Name` مشخص کن.\n\n"
         "📌 **مثال:**\n"
-        "`𓆩 𝑁𝐴𝑀𝐸 𓆪`\n"
-        "`『 𝑁𝐴𝑀𝐸 』`\n"
-        "`⇣☻⇡ 𝑁𝐴𝑀𝐸 ☾❼❽☽`\n\n"
+        "`𓆩 Name 𓆪`\n"
+        "`『 Name 』`\n"
+        "`⇣☻⇡ Name ☾❼❽☽`\n\n"
+        "💡 می‌تونی از `NAME`، `name` یا `اسم` هم استفاده کنی.\n\n"
         "بعد از یادگیری، هر اسمی بفرستی با همین قالب تگ می‌شه."
     )
 
@@ -314,10 +382,13 @@ async def handle_text(client, message):
 
     user_id = get_sender_id(message)
     user = get_user(user_id)
+    
+    print(f"📩 پیام از کاربر: {user_id} | متن: {text[:40]}")
 
     # ── حالت یادگیری قالب ──
-    if "NAME" in text:
-        parts = text.split("NAME", 1)
+    placeholder = find_placeholder(text)
+    if placeholder:
+        parts = text.split(placeholder, 1)
         user["prefix"] = parts[0]
         user["suffix"] = parts[1] if len(parts) > 1 else ""
         set_user(user_id, user)
@@ -325,7 +396,8 @@ async def handle_text(client, message):
             f"🎓 **قالب یاد گرفته شد!**\n\n"
             f"پیشوند: `{user['prefix']}`\n"
             f"پسوند: `{user['suffix']}`\n\n"
-            f"نمونه:\n{build_tag('مریم', user)}\n{build_tag('arsam', user)}"
+            f"نمونه:\n{build_tag('مریم', user)}\n{build_tag('arsam', user)}\n\n"
+            f"✅ از این به بعد هر اسمی بفرستی با همین قالب تگ می‌شه."
         )
         return
 
