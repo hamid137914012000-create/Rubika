@@ -1,4 +1,4 @@
- import os
+import os
 import json
 from nicotin import Client, filters
 from fonts import convert, FONTS
@@ -37,6 +37,40 @@ COMMANDS = [
 
 
 # ═══════════════════════════════════════════
+# تابع کمکی برای گرفتن آیدی فرستنده
+# ═══════════════════════════════════════════
+
+def get_sender_id(message):
+    """آیدی فرستنده رو از هر جایی که هست بگیر"""
+    # راه‌های مختلف رو امتحان کن
+    for attr in ["sender_id", "from_id", "from_user_id", "user_id"]:
+        if hasattr(message, attr):
+            val = getattr(message, attr)
+            if val:
+                return val
+    
+    # اگه sender یه آبجکت بود
+    if hasattr(message, "sender") and message.sender:
+        if hasattr(message.sender, "id"):
+            return message.sender.id
+        if hasattr(message.sender, "user_id"):
+            return message.sender.user_id
+    
+    # اگه from_user یه آبجکت بود
+    if hasattr(message, "from_user") and message.from_user:
+        if hasattr(message.from_user, "id"):
+            return message.from_user.id
+    
+    # اگه author بود
+    if hasattr(message, "author") and message.author:
+        if hasattr(message.author, "id"):
+            return message.author.id
+    
+    print("⚠️ نتونستم آیدی فرستنده رو بگیرم. ویژگی‌های موجود:", dir(message))
+    return None
+
+
+# ═══════════════════════════════════════════
 # دیتابیس
 # ═══════════════════════════════════════════
 
@@ -56,6 +90,8 @@ def save_db(data):
 
 
 def get_user(user_id):
+    if user_id is None:
+        return DEFAULT_USER.copy()
     db = load_db()
     user = db.get(str(user_id), DEFAULT_USER.copy())
     for k, v in DEFAULT_USER.items():
@@ -65,6 +101,8 @@ def get_user(user_id):
 
 
 def set_user(user_id, data):
+    if user_id is None:
+        return
     db = load_db()
     db[str(user_id)] = data
     save_db(db)
@@ -83,7 +121,8 @@ def build_tag(name, user):
 
 
 async def is_member(client, user_id):
-    """چک عضویت در چنل اجباری"""
+    if user_id is None:
+        return False
     try:
         member = await client.get_chat_member(FORCE_CHANNEL, user_id)
         return member.status not in ["left", "kicked"]
@@ -93,14 +132,14 @@ async def is_member(client, user_id):
 
 
 async def check_force_join(client, message):
-    """اگه کاربر عضو نبود، پیام بده و False برگردون"""
-    user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    user = get_user(user_id)
     if user.get("verified"):
         return True
 
-    if await is_member(client, message.sender_id):
+    if await is_member(client, user_id):
         user["verified"] = True
-        set_user(message.sender_id, user)
+        set_user(user_id, user)
         return True
 
     await message.reply(
@@ -141,10 +180,11 @@ async def cmd_start(client, message):
 
 @app.on_message(filters.command("verify"))
 async def cmd_verify(client, message):
-    if await is_member(client, message.sender_id):
-        user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    if await is_member(client, user_id):
+        user = get_user(user_id)
         user["verified"] = True
-        set_user(message.sender_id, user)
+        set_user(user_id, user)
         await message.reply("✅ عضویتت تأیید شد! حالا می‌تونی از ربات استفاده کنی.\n\n`/start` رو بزن.")
     else:
         await message.reply(
@@ -179,9 +219,10 @@ async def cmd_setfont(client, message):
     if font_name not in FONTS:
         await message.reply(f"❌ فونت `{font_name}` وجود نداره.\nاز `/fonts` لیست رو ببین.")
         return
-    user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    user = get_user(user_id)
     user["font"] = font_name
-    set_user(message.sender_id, user)
+    set_user(user_id, user)
     await message.reply(
         f"✅ فونت به `{font_name}` تغییر کرد.\n\n"
         f"نمونه:\n{convert('arsam', font_name)}"
@@ -229,11 +270,12 @@ async def cmd_settemplate(client, message):
         await message.reply(f"❌ قالب `{tpl_name}` وجود نداره.\nاز `/templates` ببین.")
         return
     tpl = TEMPLATES[tpl_name]
-    user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    user = get_user(user_id)
     user["prefix"] = tpl["prefix"]
     user["suffix"] = tpl["suffix"]
     user["font"] = tpl["font"]
-    set_user(message.sender_id, user)
+    set_user(user_id, user)
     await message.reply(
         f"✅ قالب `{tpl['name']}` فعال شد.\n\n"
         f"نمونه:\n{build_tag('arsam', user)}"
@@ -264,9 +306,10 @@ async def cmd_setprefix(client, message):
     if len(args) < 2:
         await message.reply("❌ مثال:\n`/setprefix 𓄂 ‌`")
         return
-    user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    user = get_user(user_id)
     user["prefix"] = args[1]
-    set_user(message.sender_id, user)
+    set_user(user_id, user)
     await message.reply(f"✅ پیشوند تغییر کرد.\n\nنمونه:\n{build_tag('arsam', user)}")
 
 
@@ -278,9 +321,10 @@ async def cmd_setsuffix(client, message):
     if len(args) < 2:
         await message.reply("❌ مثال:\n`/setsuffix ♡𝑫𝑶𝑳𝑭𓆃`")
         return
-    user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    user = get_user(user_id)
     user["suffix"] = args[1]
-    set_user(message.sender_id, user)
+    set_user(user_id, user)
     await message.reply(f"✅ پسوند تغییر کرد.\n\nنمونه:\n{build_tag('arsam', user)}")
 
 
@@ -288,7 +332,8 @@ async def cmd_setsuffix(client, message):
 async def cmd_mytag(client, message):
     if not await check_force_join(client, message):
         return
-    user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    user = get_user(user_id)
     await message.reply(
         f"📌 **تنظیمات فعلی تو:**\n\n"
         f"🔤 فونت: `{user['font']}`\n"
@@ -302,9 +347,10 @@ async def cmd_mytag(client, message):
 async def cmd_reset(client, message):
     if not await check_force_join(client, message):
         return
+    user_id = get_sender_id(message)
     new_user = DEFAULT_USER.copy()
     new_user["verified"] = True
-    set_user(message.sender_id, new_user)
+    set_user(user_id, new_user)
     await message.reply("✅ همه‌چیز به حالت پیش‌فرض برگشت.")
 
 
@@ -360,14 +406,15 @@ async def handle_text(client, message):
     if not await check_force_join(client, message):
         return
 
-    user = get_user(message.sender_id)
+    user_id = get_sender_id(message)
+    user = get_user(user_id)
 
     # ── حالت یادگیری قالب ──
     if "NAME" in text:
         parts = text.split("NAME", 1)
         user["prefix"] = parts[0]
         user["suffix"] = parts[1] if len(parts) > 1 else ""
-        set_user(message.sender_id, user)
+        set_user(user_id, user)
         await message.reply(
             f"🎓 **قالب یاد گرفته شد!**\n\n"
             f"پیشوند: `{user['prefix']}`\n"
