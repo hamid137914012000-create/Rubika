@@ -1,9 +1,16 @@
+import os
 from nicotin import Client, filters
 from fonts import convert, FONTS
 from database import get_user, set_user
 from templates import TEMPLATES
 
-app = Client(bot_token="TOKEN_جديد_رو_اينجا_بذار")
+# ── توکن از متغیر محیطی خونده می‌شه ──
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise ValueError("❌ متغیر BOT_TOKEN تنظیم نشده! توی Railway → Variables اضافه‌اش کن.")
+
+app = Client(bot_token=BOT_TOKEN)
 
 REQUIRED_CHANNELS = ["@your_channel1", "@your_channel2"]
 ADMINS = [123456789]
