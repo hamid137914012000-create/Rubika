@@ -13,10 +13,6 @@ if not BOT_TOKEN:
 
 app = Client(bot_token=BOT_TOKEN)
 
-# ── چنل اجباری ──
-FORCE_CHANNEL = "@VOICKAL_DOIF"
-CHANNEL_LINK = "https://rubika.ir/VOICKAL_DOIF"
-
 # ── فایل دیتابیس ──
 DB_FILE = "users_db.json"
 
@@ -25,14 +21,13 @@ DEFAULT_USER = {
     "font": "bold",
     "prefix": "𓄂 ‌",
     "suffix": " ♡𝑫𝑶𝑳𝑭𓆃",
-    "verified": False,
 }
 
 # ── لیست دستورات معتبر ──
 COMMANDS = [
     "start", "fonts", "setfont", "templates", "settemplate",
     "settag", "setprefix", "setsuffix", "mytag", "reset",
-    "cancel", "verify", "help"
+    "cancel", "help"
 ]
 
 
@@ -41,32 +36,19 @@ COMMANDS = [
 # ═══════════════════════════════════════════
 
 def get_sender_id(message):
-    """آیدی فرستنده رو از هر جایی که هست بگیر"""
-    # راه‌های مختلف رو امتحان کن
     for attr in ["sender_id", "from_id", "from_user_id", "user_id"]:
         if hasattr(message, attr):
             val = getattr(message, attr)
             if val:
                 return val
-    
-    # اگه sender یه آبجکت بود
     if hasattr(message, "sender") and message.sender:
         if hasattr(message.sender, "id"):
             return message.sender.id
         if hasattr(message.sender, "user_id"):
             return message.sender.user_id
-    
-    # اگه from_user یه آبجکت بود
     if hasattr(message, "from_user") and message.from_user:
         if hasattr(message.from_user, "id"):
             return message.from_user.id
-    
-    # اگه author بود
-    if hasattr(message, "author") and message.author:
-        if hasattr(message.author, "id"):
-            return message.author.id
-    
-    print("⚠️ نتونستم آیدی فرستنده رو بگیرم. ویژگی‌های موجود:", dir(message))
     return None
 
 
@@ -120,45 +102,12 @@ def build_tag(name, user):
     return f"{user.get('prefix','')}{converted}{user.get('suffix','')}"
 
 
-async def is_member(client, user_id):
-    if user_id is None:
-        return False
-    try:
-        member = await client.get_chat_member(FORCE_CHANNEL, user_id)
-        return member.status not in ["left", "kicked"]
-    except Exception as e:
-        print("⚠️ خطا در چک عضویت:", e)
-        return False
-
-
-async def check_force_join(client, message):
-    user_id = get_sender_id(message)
-    user = get_user(user_id)
-    if user.get("verified"):
-        return True
-
-    if await is_member(client, user_id):
-        user["verified"] = True
-        set_user(user_id, user)
-        return True
-
-    await message.reply(
-        "🔒 **برای استفاده از ربات، اول در چنل ما عضو شو:**\n\n"
-        f"📢 {FORCE_CHANNEL}\n"
-        f"🔗 {CHANNEL_LINK}\n\n"
-        "بعد از عضویت، دستور `/verify` رو بزن."
-    )
-    return False
-
-
 # ═══════════════════════════════════════════
 # دستورات
 # ═══════════════════════════════════════════
 
 @app.on_message(filters.command("start"))
 async def cmd_start(client, message):
-    if not await check_force_join(client, message):
-        return
     await message.reply(
         "🎨 **ربات تگ‌ساز حرفه‌ای**\n\n"
         "کافیه اسمت رو بفرستی تا تگ بگیری:\n"
@@ -178,27 +127,8 @@ async def cmd_start(client, message):
     )
 
 
-@app.on_message(filters.command("verify"))
-async def cmd_verify(client, message):
-    user_id = get_sender_id(message)
-    if await is_member(client, user_id):
-        user = get_user(user_id)
-        user["verified"] = True
-        set_user(user_id, user)
-        await message.reply("✅ عضویتت تأیید شد! حالا می‌تونی از ربات استفاده کنی.\n\n`/start` رو بزن.")
-    else:
-        await message.reply(
-            "❌ هنوز عضو نشدی!\n\n"
-            f"📢 {FORCE_CHANNEL}\n"
-            f"🔗 {CHANNEL_LINK}\n\n"
-            "بعد از عضویت، دوباره `/verify` رو بزن."
-        )
-
-
 @app.on_message(filters.command("fonts"))
 async def cmd_fonts(client, message):
-    if not await check_force_join(client, message):
-        return
     sample = "arsam"
     lines = ["🔤 **فونت‌های موجود:**\n"]
     for key in FONTS.keys():
@@ -209,8 +139,6 @@ async def cmd_fonts(client, message):
 
 @app.on_message(filters.command("setfont"))
 async def cmd_setfont(client, message):
-    if not await check_force_join(client, message):
-        return
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.reply("❌ مثال:\n`/setfont bold`")
@@ -248,8 +176,6 @@ TEMPLATES = {
 
 @app.on_message(filters.command("templates"))
 async def cmd_templates(client, message):
-    if not await check_force_join(client, message):
-        return
     lines = ["🎨 **قالب‌های آماده:**\n"]
     for key, t in TEMPLATES.items():
         lines.append(f"• `{key}` — {t['name']}")
@@ -259,8 +185,6 @@ async def cmd_templates(client, message):
 
 @app.on_message(filters.command("settemplate"))
 async def cmd_settemplate(client, message):
-    if not await check_force_join(client, message):
-        return
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.reply("❌ مثال:\n`/settemplate dolf`")
@@ -284,8 +208,6 @@ async def cmd_settemplate(client, message):
 
 @app.on_message(filters.command("settag"))
 async def cmd_settag(client, message):
-    if not await check_force_join(client, message):
-        return
     await message.reply(
         "🎓 **حالت یادگیری قالب**\n\n"
         "یه نمونه تگ از قالب دلخواهت بفرست.\n"
@@ -300,8 +222,6 @@ async def cmd_settag(client, message):
 
 @app.on_message(filters.command("setprefix"))
 async def cmd_setprefix(client, message):
-    if not await check_force_join(client, message):
-        return
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.reply("❌ مثال:\n`/setprefix 𓄂 ‌`")
@@ -315,8 +235,6 @@ async def cmd_setprefix(client, message):
 
 @app.on_message(filters.command("setsuffix"))
 async def cmd_setsuffix(client, message):
-    if not await check_force_join(client, message):
-        return
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.reply("❌ مثال:\n`/setsuffix ♡𝑫𝑶𝑳𝑭𓆃`")
@@ -330,8 +248,6 @@ async def cmd_setsuffix(client, message):
 
 @app.on_message(filters.command("mytag"))
 async def cmd_mytag(client, message):
-    if not await check_force_join(client, message):
-        return
     user_id = get_sender_id(message)
     user = get_user(user_id)
     await message.reply(
@@ -345,12 +261,8 @@ async def cmd_mytag(client, message):
 
 @app.on_message(filters.command("reset"))
 async def cmd_reset(client, message):
-    if not await check_force_join(client, message):
-        return
     user_id = get_sender_id(message)
-    new_user = DEFAULT_USER.copy()
-    new_user["verified"] = True
-    set_user(user_id, new_user)
+    set_user(user_id, DEFAULT_USER.copy())
     await message.reply("✅ همه‌چیز به حالت پیش‌فرض برگشت.")
 
 
@@ -361,8 +273,6 @@ async def cmd_cancel(client, message):
 
 @app.on_message(filters.command("help"))
 async def cmd_help(client, message):
-    if not await check_force_join(client, message):
-        return
     await message.reply(
         "📖 **راهنمای ربات**\n\n"
         "🎯 فقط اسمت رو بفرست تا تگ بگیری!\n\n"
@@ -401,10 +311,6 @@ async def handle_text(client, message):
         text = text.lstrip("/").strip()
         if not text:
             return
-
-    # چک عضویت اجباری
-    if not await check_force_join(client, message):
-        return
 
     user_id = get_sender_id(message)
     user = get_user(user_id)
