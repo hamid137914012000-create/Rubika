@@ -42,52 +42,33 @@ COMMANDS = [
 # ═══════════════════════════════════════════
 
 def get_sender_id(message):
-    """آیدی فرستنده رو با اولویت‌های مختلف بگیر"""
+    """آیدی فرستنده رو از ویژگی‌های واقعی nicotin بگیر"""
+    # ⭐ chat_id مستقیم (توی چت خصوصی همون user_id هست)
     try:
-        if hasattr(message, "sender_id") and message.sender_id:
-            return str(message.sender_id)
+        if hasattr(message, "chat_id") and message.chat_id:
+            return str(message.chat_id)
     except Exception:
         pass
     
-    try:
-        if hasattr(message, "from_id") and message.from_id:
-            return str(message.from_id)
-    except Exception:
-        pass
-    
+    # ⭐ from_user (ممکنه آبجکت باشه یا آیدی مستقیم)
     try:
         if hasattr(message, "from_user") and message.from_user:
-            if hasattr(message.from_user, "id") and message.from_user.id:
+            # اگه آبجکت بود و id داشت
+            if hasattr(message.from_user, "id"):
                 return str(message.from_user.id)
-            if hasattr(message.from_user, "user_id") and message.from_user.user_id:
-                return str(message.from_user.user_id)
+            # اگه خودش آیدی بود
+            return str(message.from_user)
     except Exception:
         pass
     
+    # از id پیام به عنوان آخرین راه
     try:
-        if hasattr(message, "sender") and message.sender:
-            if hasattr(message.sender, "id") and message.sender.id:
-                return str(message.sender.id)
-            if hasattr(message.sender, "user_id") and message.sender.user_id:
-                return str(message.sender.user_id)
+        if hasattr(message, "id") and message.id:
+            return str(message.id)
     except Exception:
         pass
     
-    try:
-        if hasattr(message, "author") and message.author:
-            if hasattr(message.author, "id") and message.author.id:
-                return str(message.author.id)
-    except Exception:
-        pass
-    
-    try:
-        if hasattr(message, "chat") and message.chat:
-            if hasattr(message.chat, "id") and message.chat.id:
-                return str(message.chat.id)
-    except Exception:
-        pass
-    
-    print("⚠️ نتونستم آیدی رو بگیرم. ویژگی‌های message:", dir(message))
+    print("⚠️ نتونستم آیدی رو بگیرم. ویژگی‌ها:", dir(message))
     return None
 
 
@@ -119,11 +100,9 @@ def get_user(user_id):
     
     user_id = str(user_id)
     
-    # اول از کش
     if user_id in _user_cache:
         return _user_cache[user_id].copy()
     
-    # بعد از فایل
     db = load_db()
     user = db.get(user_id, DEFAULT_USER.copy())
     for k, v in DEFAULT_USER.items():
@@ -136,10 +115,12 @@ def get_user(user_id):
 
 def set_user(user_id, data):
     if user_id is None:
+        print("⚠️ user_id None بود، ذخیره نشد!")
         return
     
     user_id = str(user_id)
     _user_cache[user_id] = data.copy()
+    print(f"💾 ذخیره شد برای {user_id}: prefix={data.get('prefix')}, suffix={data.get('suffix')}")
     
     try:
         db = load_db()
@@ -162,7 +143,6 @@ def build_tag(name, user):
 
 
 def find_placeholder(text):
-    """دنبال کلمه‌ی جایگزین بگرد و موقعیتش رو برگردون"""
     for word in PLACEHOLDER_WORDS:
         if word in text:
             return word
@@ -283,8 +263,7 @@ async def cmd_settag(client, message):
         "`𓆩 Name 𓆪`\n"
         "`『 Name 』`\n"
         "`⇣☻⇡ Name ☾❼❽☽`\n\n"
-        "💡 می‌تونی از `NAME`، `name` یا `اسم` هم استفاده کنی.\n\n"
-        "بعد از یادگیری، هر اسمی بفرستی با همین قالب تگ می‌شه."
+        "💡 می‌تونی از `NAME`، `name` یا `اسم` هم استفاده کنی."
     )
 
 
@@ -371,7 +350,6 @@ async def handle_text(client, message):
     if not text:
         return
 
-    # اگه دستور معتبر بود، رد کن
     if text.startswith("/"):
         cmd = text.split()[0][1:].lower()
         if cmd in COMMANDS:
@@ -381,9 +359,9 @@ async def handle_text(client, message):
             return
 
     user_id = get_sender_id(message)
-    user = get_user(user_id)
-    
     print(f"📩 پیام از کاربر: {user_id} | متن: {text[:40]}")
+    
+    user = get_user(user_id)
 
     # ── حالت یادگیری قالب ──
     placeholder = find_placeholder(text)
